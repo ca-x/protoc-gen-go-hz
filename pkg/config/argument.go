@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// Package config provides configuration structures and parsing logic for the protoc-gen-go-hz plugin.
+// It handles plugin parameters passed through protoc's --go-hz_opt flag.
 package config
 
 import (
@@ -24,7 +26,12 @@ import (
 	"github.com/cloudwego/hertz/cmd/hz/meta"
 )
 
-// Argument 是插件参数配置，基于hz的Argument但简化
+// Argument 是插件参数配置，基于 hz 的 Argument 但简化以适配 protoc 插件模式。
+// 参数通过 protoc 的 --go-hz_opt 标志传递，格式为 key=value，多个参数用逗号分隔。
+//
+// 示例:
+//
+//	protoc --go-hz_out=. --go-hz_opt=verbose=true,handler_dir=biz/handler your.proto
 type Argument struct {
 	Verbose    bool   // 详细输出
 	OutDir     string // 输出目录
@@ -67,7 +74,15 @@ type Argument struct {
 	CustomizePackage string // 自定义包模板路径
 }
 
-// Unpack 解析参数列表
+// Unpack 解析参数列表，将 protoc 传递的 key=value 格式参数解析到 Argument 结构体。
+// params 是从 protoc 的 --go-hz_opt 标志获取的参数列表。
+//
+// 参数格式:
+//   - 布尔值: verbose=true, need_go_mod=1
+//   - 字符串: out_dir=., service=demo
+//   - 列表: exclude_file=a.proto,b.proto
+//
+// 该方法会自动初始化默认值并验证参数格式。
 func (arg *Argument) Unpack(params []string) error {
 	// 初始化默认值
 	if arg.OptPkgMap == nil {
@@ -108,7 +123,9 @@ func (arg *Argument) Unpack(params []string) error {
 	return nil
 }
 
-// parseParam 解析单个参数
+// parseParam 解析单个参数，将 key=value 格式的参数解析并赋值到对应字段。
+// 支持的参数类型包括布尔值、字符串、列表等。
+// 对于未知参数，会静默忽略以保持向后兼容性。
 func (arg *Argument) parseParam(param string) error {
 	if param == "" {
 		return nil
@@ -201,7 +218,12 @@ func (arg *Argument) parseParam(param string) error {
 	return nil
 }
 
-// parseOptionPackage 解析option_package参数
+// parseOptionPackage 解析 option_package 参数，用于指定 proto 包到 Go 包的映射。
+// 参数格式: option_package:proto_package=go_package
+//
+// 示例:
+//
+//	option_package:google/protobuf=github.com/golang/protobuf/ptypes
 func (arg *Argument) parseOptionPackage(key, value string) error {
 	// 格式: include_path=import_path
 	if value == "" {
@@ -211,7 +233,8 @@ func (arg *Argument) parseOptionPackage(key, value string) error {
 	return nil
 }
 
-// GetGoPackage 获取Go包名
+// GetGoPackage 获取 Go 模块路径，该路径从 proto 文件的 go_package 选项自动提取。
+// 如果未能提取到有效的模块路径，返回错误。
 func (arg *Argument) GetGoPackage() (string, error) {
 	if arg.Gomod == "" {
 		return "", fmt.Errorf("go module is required")
@@ -219,7 +242,8 @@ func (arg *Argument) GetGoPackage() (string, error) {
 	return arg.Gomod, nil
 }
 
-// GetModelDir 获取模型目录
+// GetModelDir 获取模型代码生成目录，如果未指定则使用默认值。
+// 默认目录为 "biz/model"。
 func (arg *Argument) GetModelDir() (string, error) {
 	if arg.ModelDir == "" {
 		return meta.ModelDir, nil
@@ -227,7 +251,8 @@ func (arg *Argument) GetModelDir() (string, error) {
 	return arg.ModelDir, nil
 }
 
-// Validate 验证参数
+// Validate 验证参数配置的完整性和正确性。
+// 主要验证必需的参数（如 Go 模块路径）是否已设置，以及路径格式是否正确。
 func (arg *Argument) Validate() error {
 	if arg.Gomod == "" {
 		return fmt.Errorf("go module is required (should be auto-extracted from proto go_package option)")
